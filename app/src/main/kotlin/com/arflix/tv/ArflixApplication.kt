@@ -73,6 +73,8 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
     lateinit var watchlistRepository: WatchlistRepository
     @Inject
     lateinit var appUsageAnalyticsRepository: AppUsageAnalyticsRepository
+    @Inject
+    lateinit var playbackWebSocketServer: com.arflix.tv.server.PlaybackWebSocketServer
 
     /**
      * [OkHttpProvider.init] must run before *anything* first touches [OkHttpProvider.client]:
@@ -93,6 +95,8 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
         com.arflix.tv.network.initializeNetworkPlatform(this)
         super.onCreate()
         instance = this
+
+        playbackWebSocketServer.start()
 
         // Initialize global DNS provider and user agent from DataStore before network calls.
         appScope.launch(Dispatchers.IO) {
