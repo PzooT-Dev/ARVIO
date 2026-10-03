@@ -448,6 +448,7 @@ ksp {
     implementation("io.ktor:ktor-server-cio:2.3.7")
     implementation("io.ktor:ktor-server-call-logging:2.3.7")
     implementation("io.ktor:ktor-server-host-common:2.3.7")
+    implementation("io.ktor:ktor-server-websockets:2.3.7")
 
     // DataStore for preferences
     implementation("androidx.datastore:datastore-preferences:1.0.0")
