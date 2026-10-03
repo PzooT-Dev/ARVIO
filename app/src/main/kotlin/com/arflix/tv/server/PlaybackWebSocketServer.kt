@@ -3,6 +3,7 @@ package com.arflix.tv.server
 import android.util.Log
 import com.arflix.tv.data.repository.PlaybackEventPublisher
 import io.ktor.server.cio.CIO
+import io.ktor.server.application.install
 import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.routing.routing
