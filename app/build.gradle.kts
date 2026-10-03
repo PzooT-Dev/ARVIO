@@ -206,7 +206,9 @@ android {
         debug {
             isMinifyEnabled = false
             isDebuggable = true
-            // applicationIdSuffix = ".debug" // Disabled to preserve settings between debug/release
+            // This feature branch needs an installable test build that can coexist with
+            // the user's normal signed ARVIO installation.
+            applicationIdSuffix = ".wsbeta"
             versionNameSuffix = "-debug"
 
             // Build config fields for debug
