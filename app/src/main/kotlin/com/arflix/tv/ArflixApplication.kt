@@ -96,7 +96,11 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
         super.onCreate()
         instance = this
 
-        playbackWebSocketServer.start()
+        // Robolectric creates Application instances during local unit tests. Do not bind
+        // the fixed LAN telemetry port in that environment; real Android devices still start it.
+        if (!Build.FINGERPRINT.orEmpty().contains("robolectric", ignoreCase = true)) {
+            playbackWebSocketServer.start()
+        }
 
         // Initialize global DNS provider and user agent from DataStore before network calls.
         appScope.launch(Dispatchers.IO) {
