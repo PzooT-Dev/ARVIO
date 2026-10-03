@@ -63,7 +63,7 @@ jobs:
         run: ./gradlew testSideloadDebugUnitTest --no-daemon
 
   sideload-beta-apk:
-    name: Build sideload beta test APK
+    name: Build sideload WebSocket test APK
     runs-on: ubuntu-latest
 
     steps:
@@ -80,14 +80,14 @@ jobs:
       - name: Prepare placeholder build configuration
         run: cp secrets.defaults.properties secrets.properties
 
-      - name: Build sideload beta APK
-        run: ./gradlew assembleSideloadStaging --no-daemon
+      - name: Build sideload WebSocket APK
+        run: ./gradlew assembleSideloadDebug --no-daemon
 
-      - name: Upload sideload beta APK
+      - name: Upload sideload WebSocket APK
         uses: actions/upload-artifact@v4
         with:
           name: arvio-ha-websocket-beta-${{ github.run_id }}
-          path: app/build/outputs/apk/sideload/staging/*.apk
+          path: app/build/outputs/apk/sideload/debug/*.apk
           if-no-files-found: error
           retention-days: 7
 
