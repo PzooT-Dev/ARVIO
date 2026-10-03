@@ -211,6 +211,10 @@ android {
             applicationIdSuffix = ".wsbeta"
             versionNameSuffix = "-debug"
 
+            // Contributor/test builds use placeholder direct TMDB credentials, so route
+            // metadata browsing/search through ARVIO's credential-injecting backend.
+            buildConfigField("Boolean", "ENABLE_TMDB_EDGE_PROXY", "true")
+
             // Build config fields for debug
             buildConfigField("Boolean", "ENABLE_CRASH_REPORTING", "false")
         }
