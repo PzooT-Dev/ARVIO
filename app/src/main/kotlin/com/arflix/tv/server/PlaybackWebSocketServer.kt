@@ -50,11 +50,19 @@ class PlaybackWebSocketServer @Inject constructor(
             install(WebSockets)
             routing {
                 webSocket("/playback") {
-                    send(Frame.Text(publisher.snapshot().toJson()))
-
                     val eventJob = launch {
+                        var first = true
                         publisher.events.collect { event ->
-                            send(Frame.Text(event.toJson()))
+                            val outgoing = if (first) {
+                                first = false
+                                event.copy(
+                                    event = "snapshot",
+                                    timestamp = System.currentTimeMillis(),
+                                )
+                            } else {
+                                event
+                            }
+                            send(Frame.Text(outgoing.toJson()))
                         }
                     }
 
