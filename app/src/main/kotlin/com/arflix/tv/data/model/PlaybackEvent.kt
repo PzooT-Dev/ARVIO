@@ -26,9 +26,19 @@ data class PlaybackEvent(
     val addonId: String? = null,
     val channelId: String? = null,
     val channel: String? = null,
+    val channelNumber: String? = null,
+    val channelGroup: String? = null,
     val programme: String? = null,
+    val programmeDescription: String? = null,
+    val programmeArtwork: String? = null,
+    val programmeCategory: String? = null,
     val programmeStart: Long? = null,
     val programmeEnd: Long? = null,
+    val programmeProgressPercent: Int? = null,
+    val catchupAvailable: Boolean? = null,
+    val nextProgramme: String? = null,
+    val nextProgrammeStart: Long? = null,
+    val nextProgrammeEnd: Long? = null,
     val logo: String? = null,
     val isLive: Boolean = false,
     val timestamp: Long = System.currentTimeMillis(),
@@ -55,9 +65,19 @@ data class PlaybackEvent(
 
         channelId?.let { put("channel_id", it) }
         channel?.let { put("channel", it) }
+        channelNumber?.let { put("channel_number", it) }
+        channelGroup?.let { put("channel_group", it) }
         programme?.let { put("programme", it) }
+        programmeDescription?.let { put("programme_description", it) }
+        programmeArtwork?.let { put("programme_artwork", it) }
+        programmeCategory?.let { put("programme_category", it) }
         programmeStart?.let { put("programme_start", it) }
         programmeEnd?.let { put("programme_end", it) }
+        programmeProgressPercent?.let { put("programme_progress_percent", it) }
+        catchupAvailable?.let { put("catchup_available", it) }
+        nextProgramme?.let { put("next_programme", it) }
+        nextProgrammeStart?.let { put("next_programme_start", it) }
+        nextProgrammeEnd?.let { put("next_programme_end", it) }
         logo?.let { put("logo", it) }
     }.toString()
 
