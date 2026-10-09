@@ -15,6 +15,7 @@ import com.arflix.tv.data.model.Addon
 import com.arflix.tv.data.model.AddonType
 import com.arflix.tv.data.model.AnimeStructuringStyle
 import com.arflix.tv.data.model.MediaType
+import com.arflix.tv.data.model.PlaybackEvent
 import com.arflix.tv.data.model.EpisodeIdentity
 import com.arflix.tv.data.model.SportsAddonCapabilities
 import com.arflix.tv.data.model.IptvVodSourceIds
@@ -24,6 +25,7 @@ import com.arflix.tv.data.model.Subtitle
 import com.arflix.tv.data.repository.MediaRepository
 import com.arflix.tv.data.repository.HomeServerRepository
 import com.arflix.tv.data.repository.PlaybackTelemetryRepository
+import com.arflix.tv.data.repository.PlaybackEventPublisher
 import com.arflix.tv.data.repository.ProfileManager
 import com.arflix.tv.data.repository.SkipInterval
 import com.arflix.tv.data.repository.SkipIntroRepository
@@ -296,6 +298,7 @@ class PlayerViewModel @Inject constructor(
     private val tmdbApi: TmdbApi,
     private val skipIntroRepository: SkipIntroRepository,
     private val playbackTelemetryRepository: PlaybackTelemetryRepository,
+    private val playbackEventPublisher: PlaybackEventPublisher,
     private val pluginManager: PluginManager,
     private val streamIntegrationRepository: StreamIntegrationRepository
 ) : ViewModel() {
@@ -343,6 +346,8 @@ class PlayerViewModel @Inject constructor(
     private var lastWatchHistorySaveTime: Long = 0
     private var lastWatchHistorySavedPositionSeconds: Long = -1L
     private var lastIsPlaying: Boolean = false
+    private var hasPlaybackTelemetryStarted: Boolean = false
+    private var lastPlaybackTelemetryProgressTime: Long = 0L
     private var hasMarkedWatched: Boolean = false
     private var hasScrobbledIntermediateStop: Boolean = false
     private var hasManualSubtitleSelection: Boolean = false
@@ -588,6 +593,7 @@ class PlayerViewModel @Inject constructor(
     private val SKIP_INTERVAL_MIN_VISIBLE_MS = 250L
 
     private val SCROBBLE_UPDATE_INTERVAL_MS = 20_000L
+    private val PLAYBACK_TELEMETRY_PROGRESS_INTERVAL_MS = 5_000L
     private val FIRST_SCROBBLE_HEARTBEAT_DELAY_MS = 5_000L
     private val WATCH_HISTORY_UPDATE_INTERVAL_MS = 30_000L
     // Exact resume positions only reach other devices through our own cloud
@@ -665,6 +671,10 @@ class PlayerViewModel @Inject constructor(
     private var holdsTelegramQuiet = false
 
     override fun onCleared() {
+        if (hasPlaybackTelemetryStarted) {
+            playbackEventPublisher.publishIdle()
+            hasPlaybackTelemetryStarted = false
+        }
         if (holdsTelegramQuiet) {
             holdsTelegramQuiet = false
             streamRepository.onPlaybackEnded()
@@ -728,6 +738,8 @@ class PlayerViewModel @Inject constructor(
         hasMarkedWatched = false
         hasScrobbledIntermediateStop = false
         lastIsPlaying = false
+        hasPlaybackTelemetryStarted = false
+        lastPlaybackTelemetryProgressTime = 0L
         lastScrobbleTime = 0
         lastWatchHistorySaveTime = 0
         lastWatchHistorySavedPositionSeconds = -1L
@@ -7711,6 +7723,55 @@ class PlayerViewModel @Inject constructor(
                 addons = currentInstalledAddons,
                 isAddonNative = mediaRepository.isAddonNative(currentMediaId)
             )
+
+            // Publish the local VOD state independently of remote scrobbling. Live TV has a
+            // separate player path and is wired to this publisher separately.
+            if (!isLiveStreamOrSports) {
+                val telemetryEvent = when {
+                    playbackState == Player.STATE_ENDED -> "stop"
+                    isPlaying && !lastIsPlaying ->
+                        if (hasPlaybackTelemetryStarted) "resume" else "start"
+                    !isPlaying && lastIsPlaying -> "pause"
+                    isPlaying &&
+                        currentTime - lastPlaybackTelemetryProgressTime >=
+                            PLAYBACK_TELEMETRY_PROGRESS_INTERVAL_MS -> "progress"
+                    else -> null
+                }
+
+                if (telemetryEvent != null) {
+                    val telemetryState = when (telemetryEvent) {
+                        "pause" -> "paused"
+                        "stop" -> "stopped"
+                        else -> "playing"
+                    }
+                    playbackEventPublisher.publish(
+                        PlaybackEvent(
+                            event = telemetryEvent,
+                            state = telemetryState,
+                            mediaType = currentMediaType.name.lowercase(),
+                            tmdbId = currentMediaId,
+                            title = currentTitle.ifBlank { currentItemTitle },
+                            episodeTitle = currentEpisodeTitle,
+                            season = currentDisplaySeason ?: currentSeason,
+                            episode = currentDisplayEpisode ?: currentEpisode,
+                            positionMs = position.coerceAtLeast(0L),
+                            durationMs = duration.coerceAtLeast(0L),
+                            progressPercent = progressPercent.coerceIn(0, 100),
+                            poster = currentPoster,
+                            backdrop = currentBackdrop,
+                            source = selectedStream?.source?.takeIf { it.isNotBlank() },
+                            addonId = selectedStream?.addonId?.takeIf { it.isNotBlank() },
+                            isLive = false,
+                        )
+                    )
+                    if (telemetryEvent == "start" || telemetryEvent == "resume") {
+                        hasPlaybackTelemetryStarted = true
+                    }
+                    if (telemetryEvent == "progress" || telemetryEvent == "start" || telemetryEvent == "resume") {
+                        lastPlaybackTelemetryProgressTime = currentTime
+                    }
+                }
+            }
 
             // Scrobble start/pause/updates with debounce
             if (!isLiveStreamOrSports && isPlaying && !lastIsPlaying) {

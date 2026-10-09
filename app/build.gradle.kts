@@ -206,8 +206,14 @@ android {
         debug {
             isMinifyEnabled = false
             isDebuggable = true
-            // applicationIdSuffix = ".debug" // Disabled to preserve settings between debug/release
+            // This feature branch needs an installable test build that can coexist with
+            // the user's normal signed ARVIO installation.
+            applicationIdSuffix = ".wsbeta"
             versionNameSuffix = "-debug"
+
+            // Contributor/test builds use placeholder direct TMDB credentials, so route
+            // metadata browsing/search through ARVIO's credential-injecting backend.
+            buildConfigField("Boolean", "ENABLE_TMDB_EDGE_PROXY", "true")
 
             // Build config fields for debug
             buildConfigField("Boolean", "ENABLE_CRASH_REPORTING", "false")
@@ -448,6 +454,7 @@ ksp {
     implementation("io.ktor:ktor-server-cio:2.3.7")
     implementation("io.ktor:ktor-server-call-logging:2.3.7")
     implementation("io.ktor:ktor-server-host-common:2.3.7")
+    implementation("io.ktor:ktor-server-websockets:2.3.7")
 
     // DataStore for preferences
     implementation("androidx.datastore:datastore-preferences:1.0.0")

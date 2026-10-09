@@ -566,6 +566,12 @@ fun LiveTvScreen(
     }
     val currentUiState by rememberUpdatedState(state)
     val context = LocalContext.current
+    val playbackEventPublisher = remember(context) {
+        dagger.hilt.android.EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            com.arflix.tv.data.repository.PlaybackEventEntryPoint::class.java,
+        ).playbackEventPublisher()
+    }
     val activity = remember(context) { context.findActivity() }
     val configuration = LocalConfiguration.current
     // Hebrew/Arabic mirror the layout; the D-pad handlers below are written for
@@ -3142,6 +3148,103 @@ fun LiveTvScreen(
             playerPlayWhenReady = exoPlayer.playWhenReady
             playerIsBuffering = exoPlayer.playbackState == Player.STATE_BUFFERING
             delay(if (playingCatchupProgram != null) 500L else 1_500L)
+        }
+    }
+
+    var liveTelemetryStarted by remember(exoPlayer) { mutableStateOf(false) }
+    var liveTelemetryPaused by remember(exoPlayer) { mutableStateOf(false) }
+    var liveTelemetryChannelId by remember(exoPlayer) { mutableStateOf<String?>(null) }
+    var liveTelemetryProgrammeKey by remember(exoPlayer) { mutableStateOf<String?>(null) }
+
+    fun publishLiveTelemetry(event: String, state: String) {
+        val channel = playingChannel ?: return
+        val programme = currentNowNext?.now
+        playbackEventPublisher.publish(
+            com.arflix.tv.data.model.PlaybackEvent(
+                event = event,
+                state = state,
+                mediaType = "live_tv",
+                title = channel.name,
+                channelId = channel.id,
+                channel = channel.name,
+                programme = programme?.title,
+                programmeStart = programme?.startUtcMillis,
+                programmeEnd = programme?.endUtcMillis,
+                isLive = playingCatchupProgram == null,
+            )
+        )
+    }
+
+    LaunchedEffect(
+        playerIsPlaying,
+        playerPlayWhenReady,
+        playingChannelId,
+        playingChannel?.name,
+        currentNowNext?.now?.title,
+        currentNowNext?.now?.startUtcMillis,
+        currentNowNext?.now?.endUtcMillis,
+        playingCatchupProgram,
+    ) {
+        val channel = playingChannel ?: return@LaunchedEffect
+        val programme = currentNowNext?.now
+        val programmeKey = programme?.let { "${it.startUtcMillis}|${it.endUtcMillis}|${it.title}" }
+
+        if (playerIsPlaying) {
+            val event = when {
+                !liveTelemetryStarted -> "start"
+                liveTelemetryChannelId != channel.id -> "channel_change"
+                liveTelemetryPaused -> "resume"
+                liveTelemetryProgrammeKey != programmeKey -> "programme_change"
+                else -> null
+            }
+            if (event != null) {
+                publishLiveTelemetry(event, "playing")
+            }
+            liveTelemetryStarted = true
+            liveTelemetryPaused = false
+            liveTelemetryChannelId = channel.id
+            liveTelemetryProgrammeKey = programmeKey
+        } else if (liveTelemetryStarted && !playerPlayWhenReady && !liveTelemetryPaused) {
+            publishLiveTelemetry("pause", "paused")
+            liveTelemetryPaused = true
+            liveTelemetryProgrammeKey = programmeKey
+        } else if (
+            liveTelemetryStarted &&
+            liveTelemetryChannelId == channel.id &&
+            liveTelemetryProgrammeKey != programmeKey
+        ) {
+            publishLiveTelemetry("programme_change", if (liveTelemetryPaused) "paused" else "playing")
+            liveTelemetryProgrammeKey = programmeKey
+        }
+    }
+
+    val latestLiveTelemetryChannel by rememberUpdatedState(playingChannel)
+    val latestLiveTelemetryProgramme by rememberUpdatedState(currentNowNext?.now)
+    val latestLiveTelemetryCatchup by rememberUpdatedState(playingCatchupProgram)
+    DisposableEffect(playbackEventPublisher, exoPlayer) {
+        onDispose {
+            if (liveTelemetryStarted) {
+                val channel = latestLiveTelemetryChannel
+                val programme = latestLiveTelemetryProgramme
+                if (channel != null) {
+                    playbackEventPublisher.publish(
+                        com.arflix.tv.data.model.PlaybackEvent(
+                            event = "stop",
+                            state = "stopped",
+                            mediaType = "live_tv",
+                            title = channel.name,
+                            channelId = channel.id,
+                            channel = channel.name,
+                            programme = programme?.title,
+                            programmeStart = programme?.startUtcMillis,
+                            programmeEnd = programme?.endUtcMillis,
+                            isLive = latestLiveTelemetryCatchup == null,
+                        )
+                    )
+                } else {
+                    playbackEventPublisher.publishIdle()
+                }
+            }
         }
     }
 
